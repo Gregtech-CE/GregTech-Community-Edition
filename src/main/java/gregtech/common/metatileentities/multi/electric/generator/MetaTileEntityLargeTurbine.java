@@ -55,7 +55,7 @@ public class MetaTileEntityLargeTurbine extends RotorHolderMultiblockController 
     public IFluidHandler exportFluidHandler;
 
     public MetaTileEntityLargeTurbine(ResourceLocation metaTileEntityId, TurbineType turbineType) {
-        super(metaTileEntityId, turbineType.recipeMap, GTValues.V[4]);
+        super(metaTileEntityId, turbineType.recipeMap, GTValues.V[4], true);
         this.turbineType = turbineType;
         reinitializeStructurePattern();
     }
@@ -101,6 +101,11 @@ public class MetaTileEntityLargeTurbine extends RotorHolderMultiblockController 
 
             ITextComponent fuelName = new TextComponentTranslation(fuelAmount == 0 ? "gregtech.fluid.empty" : fuelStack.getUnlocalizedName());
             textList.add(new TextComponentTranslation("gregtech.multiblock.turbine.fuel_amount", fuelAmount, fuelName));
+            int consumption = 0;
+            if (workableHandler.getRecipeDuration() > 0) {
+                consumption = workableHandler.getFuelConsumption() / workableHandler.getRecipeDuration();
+            }
+            textList.add(new TextComponentTranslation("gregtech.multiblock.turbine.consumption_rate", consumption));
 
             if (rotorHolder.getRotorEfficiency() > 0.0) {
                 textList.add(new TextComponentTranslation("gregtech.multiblock.turbine.rotor_speed", rotorHolder.getCurrentRotorSpeed(), rotorHolder.getMaxRotorSpeed()));
@@ -148,8 +153,8 @@ public class MetaTileEntityLargeTurbine extends RotorHolderMultiblockController 
         return turbineType.casingRenderer;
     }
 
-    /** Deprecated method please use {@code {@see isRotorFaceFree}} instead
-     *
+    /**
+     * Deprecated method please use {@code {@see isRotorFaceFree}} instead
      */
     @Deprecated
     public boolean isTurbineFaceFree() {

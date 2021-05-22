@@ -11,10 +11,10 @@ import gregtech.api.capability.impl.FuelRecipeLogic;
 import gregtech.api.metatileentity.MTETrait;
 import gregtech.api.metatileentity.multiblock.IMultiblockPart;
 import gregtech.api.metatileentity.multiblock.MultiblockAbility;
-import gregtech.api.metatileentity.multiblock.MultiblockWithDisplayBase;
 import gregtech.api.multiblock.PatternMatchContext;
 import gregtech.api.recipes.machines.FuelRecipeMap;
 import gregtech.api.render.Textures;
+import gregtech.common.metatileentities.multi.ThrottleableMultiblockController;
 import net.minecraft.util.ResourceLocation;
 import net.minecraft.util.text.ITextComponent;
 import net.minecraft.util.text.TextComponentTranslation;
@@ -22,7 +22,7 @@ import net.minecraft.util.text.TextComponentTranslation;
 import java.util.List;
 import java.util.Map;
 
-public abstract class FueledMultiblockController extends MultiblockWithDisplayBase {
+public abstract class FueledMultiblockController extends ThrottleableMultiblockController {
 
     protected final FuelRecipeMap recipeMap;
     protected FuelRecipeLogic workableHandler;
@@ -35,10 +35,16 @@ public abstract class FueledMultiblockController extends MultiblockWithDisplayBa
         this.workableHandler = createWorkable(maxVoltage);
     }
 
+    public FueledMultiblockController(ResourceLocation metaTileEntityId, FuelRecipeMap recipeMap, long maxVoltage, Boolean canThrottle) {
+        super(metaTileEntityId, canThrottle);
+        this.recipeMap = recipeMap;
+        this.workableHandler = createWorkable(maxVoltage);
+    }
+
     protected FuelRecipeLogic createWorkable(long maxVoltage) {
         return new FuelRecipeLogic(this, recipeMap,
-            () -> energyContainer,
-            () -> importFluidHandler, maxVoltage);
+                () -> energyContainer,
+                () -> importFluidHandler, maxVoltage);
     }
 
     @Override
@@ -49,7 +55,7 @@ public abstract class FueledMultiblockController extends MultiblockWithDisplayBa
                 textList.add(new TextComponentTranslation("gregtech.multiblock.work_paused"));
             } else if (workableHandler.isActive()) {
                 textList.add(new TextComponentTranslation("gregtech.multiblock.running"));
-                textList.add(new TextComponentTranslation("gregtech.multiblock.generation_eu", workableHandler.getRecipeOutputVoltage()));
+                textList.add(new TextComponentTranslation("gregtech.multiblock.generation_eu", workableHandler.canProduceEnergy() ? workableHandler.getRecipeOutputVoltage() : 0));
             } else {
                 textList.add(new TextComponentTranslation("gregtech.multiblock.idling"));
             }
@@ -92,13 +98,13 @@ public abstract class FueledMultiblockController extends MultiblockWithDisplayBa
     protected boolean checkStructureComponents(List<IMultiblockPart> parts, Map<MultiblockAbility<Object>, List<Object>> abilities) {
         //noinspection SuspiciousMethodCalls
         return abilities.containsKey(MultiblockAbility.IMPORT_FLUIDS) &&
-            abilities.containsKey(MultiblockAbility.OUTPUT_ENERGY);
+                abilities.containsKey(MultiblockAbility.OUTPUT_ENERGY);
     }
 
     @Override
     public void renderMetaTileEntity(CCRenderState renderState, Matrix4 translation, IVertexOperation[] pipeline) {
         super.renderMetaTileEntity(renderState, translation, pipeline);
         Textures.MULTIBLOCK_WORKABLE_OVERLAY.render(renderState, translation, pipeline, getFrontFacing(),
-            isStructureFormed() && workableHandler.isActive());
+                isStructureFormed() && workableHandler.isActive());
     }
 }

@@ -12,9 +12,7 @@ import gregtech.common.MetaFluids;
 import gregtech.common.metatileentities.electric.multiblockpart.MetaTileEntityRotorHolder;
 import gregtech.common.metatileentities.multi.electric.generator.MetaTileEntityLargeTurbine.TurbineType;
 import net.minecraft.nbt.NBTTagCompound;
-import net.minecraft.util.math.MathHelper;
 import net.minecraftforge.fluids.FluidStack;
-import net.minecraftforge.fluids.IFluidTank;
 
 import java.util.function.Supplier;
 
@@ -22,10 +20,11 @@ public class LargeTurbineWorkableHandler extends FuelRecipeLogic {
 
     private static final int CYCLE_LENGTH = 230;
     private static final int BASE_ROTOR_DAMAGE = 11;
-    private static final int BASE_EU_OUTPUT = 2048;  
+    private static final int BASE_EU_OUTPUT = 2048;
 
     private MetaTileEntityLargeTurbine largeTurbine;
     private int rotorCycleLength = CYCLE_LENGTH;
+    private double cachedThrottle = 0;
 
     public LargeTurbineWorkableHandler(MetaTileEntityLargeTurbine metaTileEntity, FuelRecipeMap recipeMap, Supplier<IEnergyContainer> energyContainer, Supplier<IMultipleTankHandler> fluidTank) {
         super(metaTileEntity, recipeMap, energyContainer, fluidTank, 0L);
@@ -38,10 +37,6 @@ public class LargeTurbineWorkableHandler extends FuelRecipeLogic {
         MetaTileEntityRotorHolder rotorHolder = largeTurbine.getAbilities(MetaTileEntityLargeTurbine.ABILITY_ROTOR_HOLDER).get(0);
         if (!rotorHolder.isHasRotor()) {
             setActive(false);
-        }
-        long totalEnergyOutput = getRecipeOutputVoltage();
-        if (totalEnergyOutput > 0) {
-            energyContainer.get().addEnergy(totalEnergyOutput);
         }
     }
 
@@ -67,12 +62,6 @@ public class LargeTurbineWorkableHandler extends FuelRecipeLogic {
 
     @Override
     public long getMaxVoltage() {
-        MetaTileEntityRotorHolder rotorHolder = largeTurbine.getAbilities(MetaTileEntityLargeTurbine.ABILITY_ROTOR_HOLDER).get(0);
-        if (rotorHolder.hasRotorInInventory()) {
-            double rotorEfficiency = rotorHolder.getRotorEfficiency();
-            double totalEnergyOutput = (BASE_EU_OUTPUT + getBonusForTurbineType(largeTurbine) * rotorEfficiency);
-            return MathHelper.ceil(totalEnergyOutput);
-        }
         return BASE_EU_OUTPUT + getBonusForTurbineType(largeTurbine);
     }
 
@@ -85,7 +74,8 @@ public class LargeTurbineWorkableHandler extends FuelRecipeLogic {
     @Override
     protected long startRecipe(FuelRecipe currentRecipe, int fuelAmountUsed, int recipeDuration) {
         addOutputFluids(currentRecipe, fuelAmountUsed);
-        return 0L; //energy is added each tick while the rotor speed is >0 RPM
+        this.cachedThrottle = this.largeTurbine.getThrottleMultiplier();
+        return super.startRecipe(currentRecipe, fuelAmountUsed, recipeDuration);
     }
 
     private void addOutputFluids(FuelRecipe currentRecipe, int fuelAmountUsed) {
@@ -104,24 +94,41 @@ public class LargeTurbineWorkableHandler extends FuelRecipeLogic {
     }
 
     private int getBonusForTurbineType(MetaTileEntityLargeTurbine turbine) {
-    	switch (turbine.turbineType) {
-		    case GAS: return ConfigHolder.gasTurbineBonusOutput;
-		    case PLASMA: return ConfigHolder.plasmaTurbineBonusOutput;
-		    case STEAM: return ConfigHolder.steamTurbineBonusOutput;
-		    default: return 1;
-    	}
+        switch (turbine.turbineType) {
+            case GAS:
+                return ConfigHolder.gasTurbineBonusOutput;
+            case PLASMA:
+                return ConfigHolder.plasmaTurbineBonusOutput;
+            case STEAM:
+                return ConfigHolder.steamTurbineBonusOutput;
+            default:
+                return 1;
+        }
     }
-    
+
     @Override
-    public long getRecipeOutputVoltage() {
+    public double getEnergyEfficiency() { //energy is added each tick while the rotor speed is >0 RPM
         MetaTileEntityRotorHolder rotorHolder = largeTurbine.getAbilities(MetaTileEntityLargeTurbine.ABILITY_ROTOR_HOLDER).get(0);
         double relativeRotorSpeed = rotorHolder.getRelativeRotorSpeed();
-        if (rotorHolder.getCurrentRotorSpeed() > 0 && rotorHolder.hasRotorInInventory()) {
-            double rotorEfficiency = rotorHolder.getRotorEfficiency();
-            double totalEnergyOutput = (BASE_EU_OUTPUT + getBonusForTurbineType(largeTurbine) * rotorEfficiency) * (relativeRotorSpeed * relativeRotorSpeed);
-            return MathHelper.ceil(totalEnergyOutput);
-        }
-        return 0L;
+        return rotorHolder.getRotorEfficiency() *
+                (relativeRotorSpeed * relativeRotorSpeed) *
+                this.largeTurbine.getThrottleEfficiency() * this.largeTurbine.getThrottleMultiplier();
+    }
+
+    @Override
+    public boolean canProduceEnergy() {
+        MetaTileEntityRotorHolder rotorHolder = largeTurbine.getAbilities(MetaTileEntityLargeTurbine.ABILITY_ROTOR_HOLDER).get(0);
+        return rotorHolder.getCurrentRotorSpeed() > 0 && rotorHolder.hasRotorInInventory();
+    }
+
+    @Override
+    public double getFuelConsumptionMultiplier() {
+        return this.largeTurbine.getThrottleMultiplier();
+    }
+
+    @Override
+    public double getRecipeDurationMultiplier() {
+        return this.largeTurbine.getThrottleMultiplier() / this.cachedThrottle;
     }
 
     @Override

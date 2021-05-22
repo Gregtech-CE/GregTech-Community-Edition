@@ -11,9 +11,11 @@ import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.network.PacketBuffer;
 import net.minecraftforge.common.capabilities.Capability;
 import net.minecraftforge.common.util.Constants.NBT;
+import net.minecraftforge.fluids.Fluid;
 import net.minecraftforge.fluids.FluidStack;
 import net.minecraftforge.fluids.IFluidTank;
 
+import javax.annotation.Nullable;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -28,8 +30,10 @@ public class FuelRecipeLogic extends MTETrait implements IControllable, IFuelabl
     protected final Supplier<IMultipleTankHandler> fluidTank;
     public final long maxVoltage;
 
-    private int recipeDurationLeft;
-    private long recipeOutputVoltage;
+    private float recipeDurationLeft;
+    private int fuelPerOperation;
+    private int operationDuration;
+    private Fluid currentFluid;
 
     private boolean isActive;
     private boolean workingEnabled = true;
@@ -44,7 +48,7 @@ public class FuelRecipeLogic extends MTETrait implements IControllable, IFuelabl
     }
 
     public long getRecipeOutputVoltage() {
-        return recipeOutputVoltage;
+        return (long) (getMaxVoltage() * getEnergyEfficiency());
     }
 
     @Override
@@ -88,8 +92,7 @@ public class FuelRecipeLogic extends MTETrait implements IControllable, IFuelabl
             if (fuelInfo == null) {
                 fuelInfo = new FluidFuelInfo(tankContents, fuelRemaining, fuelCapacity, amountPerRecipe, fuelBurnTime);
                 fuels.put(tankContents.getUnlocalizedName(), fuelInfo);
-            }
-            else {
+            } else {
                 fuelInfo.addFuelRemaining(fuelRemaining);
                 fuelInfo.addFuelBurnTime(fuelBurnTime);
             }
@@ -99,10 +102,10 @@ public class FuelRecipeLogic extends MTETrait implements IControllable, IFuelabl
 
     @Override
     public <T> T getCapability(Capability<T> capability) {
-        if(capability == GregtechTileCapabilities.CAPABILITY_CONTROLLABLE) {
+        if (capability == GregtechTileCapabilities.CAPABILITY_CONTROLLABLE) {
             return GregtechTileCapabilities.CAPABILITY_CONTROLLABLE.cast(this);
         }
-        if(capability == GregtechCapabilities.CAPABILITY_FUELABLE) {
+        if (capability == GregtechCapabilities.CAPABILITY_FUELABLE) {
             return GregtechCapabilities.CAPABILITY_FUELABLE.cast(this);
         }
         return null;
@@ -112,31 +115,59 @@ public class FuelRecipeLogic extends MTETrait implements IControllable, IFuelabl
     public void update() {
         if (getMetaTileEntity().getWorld().isRemote) return;
         if (workingEnabled) {
-            if (recipeDurationLeft > 0) {
+            if (recipeDurationLeft >= getRecipeDurationMultiplier()) {
                 if (energyContainer.get().getEnergyCanBeInserted() >=
-                    recipeOutputVoltage || shouldVoidExcessiveEnergy()) {
-                    energyContainer.get().addEnergy(recipeOutputVoltage);
-                    if (--this.recipeDurationLeft == 0) {
-                        this.wasActiveAndNeedsUpdate = true;
+                        getRecipeOutputVoltage() || shouldVoidExcessiveEnergy()) {
+                    if (canProduceEnergy()) {
+                        energyContainer.get().addEnergy(getRecipeOutputVoltage());
+                    }
+                    if (canConsumeFuel()) {
+                        if (recipeDurationLeft % operationDuration < getRecipeDurationMultiplier()) { // last operation has ended time to re-consume fuel
+                            IFluidTank tank = getCurrentTank(this.fuelPerOperation);
+                            if (tank == null) {
+                                this.recipeDurationLeft = 0;
+                            } else {
+                                tank.drain(this.fuelPerOperation, true);
+                            }
+                        }
+
+                        this.recipeDurationLeft -= getRecipeDurationMultiplier();
+
+                        if (this.recipeDurationLeft < getRecipeDurationMultiplier()) {
+                            this.wasActiveAndNeedsUpdate = true;
+                        }
                     }
                 }
             }
-            if (recipeDurationLeft == 0 && isReadyForRecipes()) {
+            if (recipeDurationLeft < getRecipeDurationMultiplier() && isReadyForRecipes()) {
                 tryAcquireNewRecipe();
             }
         }
         if (wasActiveAndNeedsUpdate) {
             setActive(false);
+            this.recipeDurationLeft = 0;
             this.wasActiveAndNeedsUpdate = false;
         }
     }
 
     protected boolean isReadyForRecipes() {
-       return true;
+        return true;
     }
 
     protected boolean shouldVoidExcessiveEnergy() {
         return false;
+    }
+
+    @Nullable
+    private IFluidTank getCurrentTank(int minMb) {
+        IMultipleTankHandler fluidTanks = this.fluidTank.get();
+        for (IFluidTank fluidTank : fluidTanks) {
+            FluidStack fluid = fluidTank.getFluid();
+            if (fluid != null && fluid.getFluid().equals(this.currentFluid) && fluid.amount >= minMb) {
+                return fluidTank;
+            }
+        }
+        return null;
     }
 
     private void tryAcquireNewRecipe() {
@@ -144,9 +175,8 @@ public class FuelRecipeLogic extends MTETrait implements IControllable, IFuelabl
         for (IFluidTank fluidTank : fluidTanks) {
             FluidStack tankContents = fluidTank.getFluid();
             if (tankContents != null && tankContents.amount > 0) {
-                int fuelAmountUsed = tryAcquireNewRecipe(tankContents);
-                if (fuelAmountUsed > 0) {
-                    fluidTank.drain(fuelAmountUsed, true);
+                if (tryAcquireNewRecipe(tankContents) > 0) {
+                    this.currentFluid = tankContents.getFluid();
                     break; //recipe is found and ready to use
                 }
             }
@@ -173,17 +203,30 @@ public class FuelRecipeLogic extends MTETrait implements IControllable, IFuelabl
         if (currentRecipe != null && checkRecipe(currentRecipe)) {
             int fuelAmountToUse = calculateFuelAmount(currentRecipe);
             if (fluidStack.amount >= fuelAmountToUse) {
-                this.recipeDurationLeft = calculateRecipeDuration(currentRecipe);
-                this.recipeOutputVoltage = startRecipe(currentRecipe, fuelAmountToUse, recipeDurationLeft);
+                int recipeDuration = calculateRecipeDuration(currentRecipe);
+                this.recipeDurationLeft = recipeDuration;
+                startRecipe(currentRecipe, fuelAmountToUse, recipeDuration);
                 if (wasActiveAndNeedsUpdate) {
                     this.wasActiveAndNeedsUpdate = false;
                 } else {
                     setActive(true);
                 }
+
+                int g = gcd(fuelAmountToUse, recipeDuration);
+
+                this.operationDuration = recipeDuration / g;
+                this.fuelPerOperation = fuelAmountToUse / g;
+
                 return fuelAmountToUse;
             }
         }
         return 0;
+    }
+
+    // may need to move this somewhere else but where ?
+    public int gcd(int a, int b) {
+        if (b == 0) return a;
+        return gcd(b, a % b);
     }
 
     // Similar to tryAcquire but with no side effects
@@ -208,20 +251,66 @@ public class FuelRecipeLogic extends MTETrait implements IControllable, IFuelabl
     }
 
     protected int calculateFuelAmount(FuelRecipe currentRecipe) {
-        return currentRecipe.getRecipeFluid().amount * getVoltageMultiplier(getMaxVoltage(), currentRecipe.getMinVoltage());
+        return (int) (currentRecipe.getRecipeFluid().amount *
+                getVoltageMultiplier(getMaxVoltage(), currentRecipe.getMinVoltage()) *
+                getFuelConsumptionMultiplier());
+    }
+
+    public int getFuelConsumption() {
+        return this.previousRecipe != null ? calculateFuelAmount(this.previousRecipe) : 0;
     }
 
     protected int calculateRecipeDuration(FuelRecipe currentRecipe) {
-        return currentRecipe.getDuration();
+        return (int) (currentRecipe.getDuration() * getRecipeDurationMultiplier());
+    }
+
+    public int getRecipeDuration() {
+        return this.previousRecipe != null ? calculateRecipeDuration(this.previousRecipe) : 0;
     }
 
     /**
-     * Performs preparations for starting given recipe and determines it's output voltage
+     * @return if the recipe duration should get decreased during the current tick does not effect energy production.
+     */
+
+    public boolean canConsumeFuel() {
+        return true;
+    }
+
+    /**
+     * @return if energy should be produced during the current tick does not effect fuel consumption.
+     */
+    public boolean canProduceEnergy() {
+        return true;
+    }
+
+    /**
+     * @return the multiplier applied to fuel consumption
+     */
+    public double getFuelConsumptionMultiplier() {
+        return 1.0;
+    }
+
+    /**
+     * @return the multiplier applied to recipe duration
+     */
+    public double getRecipeDurationMultiplier() {
+        return 1.0f;
+    }
+
+    /**
+     * @return the multiplier applied to voltage
+     */
+    public double getEnergyEfficiency() {
+        return 1.0f;
+    }
+
+    /**
+     * Performs preparations for starting given recipe output voltage is now given by getOutputVoltage
      *
-     * @return recipe's output voltage
+     * @return currently unused
      */
     protected long startRecipe(FuelRecipe currentRecipe, int fuelAmountUsed, int recipeDuration) {
-        return getMaxVoltage();
+        return 1L;
     }
 
     public static int getVoltageMultiplier(long maxVoltage, long minVoltage) {
@@ -277,10 +366,13 @@ public class FuelRecipeLogic extends MTETrait implements IControllable, IFuelabl
     public NBTTagCompound serializeNBT() {
         NBTTagCompound compound = new NBTTagCompound();
         compound.setBoolean("WorkEnabled", this.workingEnabled);
-        compound.setInteger("RecipeDurationLeft", this.recipeDurationLeft);
-        if (recipeDurationLeft > 0) {
-            compound.setLong("RecipeOutputVoltage", this.recipeOutputVoltage);
-        }
+        // HELP
+        compound.setInteger("RecipeDurationLeft", (int) this.recipeDurationLeft);
+        compound.setInteger("FuelPerOperation", this.fuelPerOperation);
+        compound.setInteger("OperationDuration", this.operationDuration);
+        // how to save the currentFluid ?
+        //compound.setTag("",this.currentFluid);
+
         return compound;
     }
 
@@ -291,10 +383,15 @@ public class FuelRecipeLogic extends MTETrait implements IControllable, IFuelabl
             this.workingEnabled = compound.getBoolean("WorkEnabled");
         }
         this.recipeDurationLeft = compound.getInteger("RecipeDurationLeft");
-        if (recipeDurationLeft > 0) {
-            this.recipeOutputVoltage = compound.getLong("RecipeOutputVoltage");
-        }
-        this.isActive = recipeDurationLeft > 0;
+        this.isActive = recipeDurationLeft >= getFuelConsumptionMultiplier();
+
+        if (compound.hasKey("FuelPerOperation")) {
+            this.fuelPerOperation = compound.getInteger("FuelPerOperation");
+        } else this.fuelPerOperation = 0;
+
+        if (compound.hasKey("OperationDuration")) {
+            this.operationDuration = compound.getInteger("OperationDuration");
+        } else this.operationDuration = (int) this.recipeDurationLeft;
     }
 
 }

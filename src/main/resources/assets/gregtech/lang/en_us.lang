@@ -2946,6 +2946,9 @@ gregtech.multiblock.invalid_structure.tooltip=This block is a controller of the 
 gregtech.multiblock.validation_failed=Invalid amount of inputs/outputs.
 gregtech.multiblock.max_energy_per_tick=Max EU/t: %s (%s)
 gregtech.multiblock.generation_eu=Outputting: %s EU/t
+gregtech.multiblock.throttle.tooltip=Boiler can output less steam and consume less fuel, but it comes with price: the fuel efficiency is lower at higher throttle rates.
+gregtech.multiblock.throttle_modify=Modify Throttle:
+gregtech.multiblock.throttle=Throttle: %d %% (%d %% eff.)
 
 gregtech.multiblock.blast_furnace.max_temperature=Max Temperature: %sK
 gregtech.multiblock.multi_furnace.heating_coil_level=Heating Coil Level: %s
@@ -2964,16 +2967,15 @@ gregtech.multiblock.turbine.rotor_speed=Rotor Speed: %s / %s RPM
 gregtech.multiblock.turbine.rotor_efficiency=Rotor Efficiency: %s%%
 gregtech.multiblock.turbine.rotor_durability=Rotor Durability: %s%%
 gregtech.multiblock.turbine.low_rotor_durability=WARNING: Rotor Durability below %s%% (%s%%)
+gregtech.multiblock.turbine.consumption_rate=Consumption rate: %s mb/t
 
 gregtech.multiblock.large_boiler.temperature=Temperature: %s / %s C
 gregtech.multiblock.large_boiler.steam_output=Steam Output: %s mb/t
-gregtech.multiblock.large_boiler.throttle=Throttle: %d %% (%d %% eff.)
 gregtech.multiblock.large_boiler.message_throttle_change=Throttle changed to: %d %%
 gregtech.multiblock.large_boiler.message_throttle_too_hot=Boiler is running too hot to throttle!
 gregtech.multiblock.large_boiler.heat_efficiency=Heat Efficiency: %d%%
 gregtech.multiblock.large_boiler.heat_efficiency.tooltip=The higher boiler temperature is, the higher it's fuel efficiency
-gregtech.multiblock.large_boiler.throttle.tooltip=Boiler can output less steam and consume less fuel, but it comes with price: the fuel efficiency is lower at higher throttle rates.
-gregtech.multiblock.large_boiler.throttle_modify=Modify Throttle:
+
 
 gregtech.command.usage=Usage: /gregtech <worldgen/util>
 gregtech.command.worldgen.usage=Usage: /gregtech worldgen <reload>
