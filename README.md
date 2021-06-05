@@ -39,16 +39,6 @@ GTCE follows a two week release cycle (when possible).
 Changelogs are generated and beautified after merging PRs every other Monday. Changelog is then submitted as a Pull Request (PR).
 Releases are built and deployed on Tuesdays after merging the Changelog PR.
 
-## Contribution
 ### Current state of project
 GTCE is under active development with regular updates. It is primarily maintained by a "GTCE Council" of contributors of various talent: developers, designers and modpack authors. This council is coordinated by @LAGIdiot. The GTCE community is very active and regularly contributes code, testing and ideas.
 We are always looking for contributors!
-
-### How to contribute
-Remember: Every contribution counts. 
-Found a bug? Please let us know by creating an Issue with the bug template. 
-Something is missing? Thought about a cool feature idea? Of course there's a template for that.  We'll have a look!
-Know how to mod or at least code? Then don't hesitate and jump to Discord channel, contact the Maintainer to discuss possible contribution.
-Anything else? Sure come to Discord.
-
-
