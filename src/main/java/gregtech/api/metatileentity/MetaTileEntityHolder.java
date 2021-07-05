@@ -6,6 +6,8 @@ import gregtech.api.GregTechAPI;
 import gregtech.api.block.machines.BlockMachine;
 import gregtech.api.cover.CoverBehavior;
 import gregtech.api.gui.IUIHolder;
+import gregtech.api.util.FirstTickScheduler;
+import gregtech.api.util.FirstTickTask;
 import gregtech.api.util.GTControlledRegistry;
 import gregtech.api.util.GTLog;
 import net.minecraft.block.state.IBlockState;
@@ -25,7 +27,7 @@ import javax.annotation.Nullable;
 import java.util.List;
 import java.util.stream.Collectors;
 
-public class MetaTileEntityHolder extends TickableTileEntityBase implements IUIHolder {
+public class MetaTileEntityHolder extends TickableTileEntityBase implements IUIHolder, FirstTickTask {
 
     private MetaTileEntity metaTileEntity;
     private boolean needToUpdateLightning = false;
@@ -215,8 +217,15 @@ public class MetaTileEntityHolder extends TickableTileEntityBase implements IUIH
     @Override
     public void onLoad() {
         super.onLoad();
-        if (metaTileEntity != null) {
-            metaTileEntity.onLoad();
+        if (this.metaTileEntity != null) {
+            FirstTickScheduler.addTask(this);
+        }
+    }
+
+    @Override
+    public void handleFirstTick() {
+        if (this.metaTileEntity != null) {
+            this.metaTileEntity.onLoad();
         }
     }
 
