@@ -17,6 +17,7 @@ import gregtech.api.metatileentity.multiblock.IMultiblockAbilityPart;
 import gregtech.api.metatileentity.multiblock.MultiblockAbility;
 import gregtech.api.render.SimpleOverlayRenderer;
 import gregtech.api.render.Textures;
+import gregtech.api.capability.impl.NotifiableFluidTank;
 import net.minecraft.client.resources.I18n;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.item.ItemStack;
@@ -24,7 +25,6 @@ import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.util.NonNullList;
 import net.minecraft.util.ResourceLocation;
 import net.minecraft.world.World;
-import net.minecraftforge.fluids.FluidTank;
 import net.minecraftforge.fluids.IFluidTank;
 import net.minecraftforge.items.IItemHandlerModifiable;
 import net.minecraftforge.items.ItemStackHandler;
@@ -36,14 +36,14 @@ public class MetaTileEntityFluidHatch extends MetaTileEntityMultiblockPart imple
 
     private static final int INITIAL_INVENTORY_SIZE = 8000;
     private ItemStackHandler containerInventory;
-    private FluidTank fluidTank;
+    private NotifiableFluidTank fluidTank;
     private boolean isExportHatch;
 
     public MetaTileEntityFluidHatch(ResourceLocation metaTileEntityId, int tier, boolean isExportHatch) {
         super(metaTileEntityId, tier);
         this.containerInventory = new ItemStackHandler(2);
         this.isExportHatch = isExportHatch;
-        this.fluidTank = new FluidTank(getInventorySize());
+        this.fluidTank = new NotifiableFluidTank(getInventorySize(), this, isExportHatch);
         initializeInventory();
     }
 
@@ -118,6 +118,20 @@ public class MetaTileEntityFluidHatch extends MetaTileEntityMultiblockPart imple
     @Override
     public void registerAbilities(List<IFluidTank> abilityList) {
         abilityList.addAll(isExportHatch ? this.exportFluids.getFluidTanks() : this.importFluids.getFluidTanks());
+    }
+
+    @Override
+    public void setupNotifiableMetaTileEntity(MetaTileEntity metaTileEntity) {
+        NotifiableFluidTank handler = null;
+        if (isExportHatch) {
+            handler = (NotifiableFluidTank) getExportFluids().getTankAt(0);
+        } else {
+            handler = (NotifiableFluidTank) getImportFluids().getTankAt(0);
+        }
+        if (handler != null) {
+            handler.setNotifiableMetaTileEntity(metaTileEntity);
+            handler.addToNotifiedList(this, handler, isExportHatch);
+        }
     }
 
     @Override
