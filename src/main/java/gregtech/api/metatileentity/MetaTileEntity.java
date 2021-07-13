@@ -484,10 +484,6 @@ public abstract class MetaTileEntity implements ICoverable {
     }
 
     public void onLoad() {
-        this.cachedComparatorValue = getActualComparatorValue();
-        for (EnumFacing side : EnumFacing.VALUES) {
-            this.sidedRedstoneInput[side.getIndex()] = GTUtility.getRedstonePower(getWorld(), getPos(), side);
-        }
     }
 
     public void onUnload() {
@@ -582,6 +578,14 @@ public abstract class MetaTileEntity implements ICoverable {
     }
 
     public void update() {
+
+        if (getTimer() == 0L) {
+            this.cachedComparatorValue = getActualComparatorValue();
+            for (EnumFacing side : EnumFacing.VALUES) {
+                this.sidedRedstoneInput[side.getIndex()] = GTUtility.getRedstonePower(getWorld(), getPos(), side);
+            }
+        }
+
         for (MTETrait mteTrait : this.mteTraits) {
             if (shouldUpdate(mteTrait)) {
                 mteTrait.update();
