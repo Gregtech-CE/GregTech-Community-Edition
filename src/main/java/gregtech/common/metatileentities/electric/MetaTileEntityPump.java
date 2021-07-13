@@ -19,6 +19,8 @@ import gregtech.api.metatileentity.MetaTileEntityHolder;
 import gregtech.api.metatileentity.TieredMetaTileEntity;
 import gregtech.api.render.Textures;
 import gregtech.api.util.GTUtility;
+import gregtech.api.util.IDirtyNotifiable;
+import gregtech.common.covers.filter.FluidFilterContainer;
 import net.minecraft.block.BlockLiquid;
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.client.resources.I18n;
@@ -28,6 +30,7 @@ import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.network.PacketBuffer;
 import net.minecraft.util.EnumFacing;
 import net.minecraft.util.EnumFacing.Axis;
+import net.minecraft.util.NonNullList;
 import net.minecraft.util.ResourceLocation;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
@@ -48,20 +51,24 @@ import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.List;
 
-public class MetaTileEntityPump extends TieredMetaTileEntity {
+public class MetaTileEntityPump extends TieredMetaTileEntity implements IDirtyNotifiable {
 
     private static final Cuboid6 PIPE_CUBOID = new Cuboid6(6 / 16.0, 0.0, 6 / 16.0, 10 / 16.0, 1.0, 10 / 16.0);
     private static final int BASE_PUMP_RANGE = 32;
     private static final int EXTRA_PUMP_RANGE = 8;
     private static final int PUMP_SPEED_BASE = 40;
 
-    private Deque<BlockPos> fluidSourceBlocks = new ArrayDeque<>();
-    private Deque<BlockPos> blocksToCheck = new ArrayDeque<>();
+    private final Deque<BlockPos> fluidSourceBlocks = new ArrayDeque<>();
+    private final Deque<BlockPos> blocksToCheck = new ArrayDeque<>();
+    private final Deque<BlockPos> blocksToReCheck = new ArrayDeque<>();
     private boolean initializedQueue = false;
     private int pumpHeadY;
 
+    protected final FluidFilterContainer fluidFilter;
+
     public MetaTileEntityPump(ResourceLocation metaTileEntityId, int tier) {
         super(metaTileEntityId, tier);
+        this.fluidFilter = new FluidFilterContainer(this);
     }
 
     @Override
@@ -128,23 +135,33 @@ public class MetaTileEntityPump extends TieredMetaTileEntity {
     }
 
     @Override
+    public void clearMachineInventory(NonNullList<ItemStack> itemBuffer) {
+        super.clearMachineInventory(itemBuffer);
+        clearInventory(itemBuffer, this.fluidFilter.getFilterInventory());
+    }
+
+    @Override
     protected ModularUI createUI(EntityPlayer entityPlayer) {
-        Builder builder = ModularUI.defaultBuilder();
+        Builder builder = ModularUI.builder(GuiTextures.BACKGROUND, 176, 147 + 82);
         builder.image(7, 16, 81, 55, GuiTextures.DISPLAY);
         TankWidget tankWidget = new TankWidget(exportFluids.getTankAt(0), 69, 52, 18, 18)
-            .setHideTooltip(true).setAlwaysShowFull(true);
+                .setHideTooltip(true).setAlwaysShowFull(true);
+
         builder.widget(tankWidget);
         builder.label(11, 20, "gregtech.gui.fluid_amount", 0xFFFFFF);
         builder.dynamicLabel(11, 30, tankWidget::getFormattedFluidAmount, 0xFFFFFF);
         builder.dynamicLabel(11, 40, tankWidget::getFluidLocalizedName, 0xFFFFFF);
+
+        this.fluidFilter.initUI(75, builder::widget);
+
         return builder.label(6, 6, getMetaFullName())
-            .widget(new FluidContainerSlotWidget(importItems, 0, 90, 17, false)
-                .setBackgroundTexture(GuiTextures.SLOT, GuiTextures.IN_SLOT_OVERLAY))
-            .widget(new ImageWidget(91, 36, 14, 15, GuiTextures.TANK_ICON))
-            .widget(new SlotWidget(exportItems, 0, 90, 54, true, false)
-                .setBackgroundTexture(GuiTextures.SLOT, GuiTextures.OUT_SLOT_OVERLAY))
-            .bindPlayerInventory(entityPlayer.inventory)
-            .build(getHolder(), entityPlayer);
+                .widget(new FluidContainerSlotWidget(importItems, 0, 90, 17, false)
+                        .setBackgroundTexture(GuiTextures.SLOT, GuiTextures.IN_SLOT_OVERLAY))
+                .widget(new ImageWidget(91, 36, 14, 15, GuiTextures.TANK_ICON))
+                .widget(new SlotWidget(exportItems, 0, 90, 54, true, false)
+                        .setBackgroundTexture(GuiTextures.SLOT, GuiTextures.OUT_SLOT_OVERLAY))
+                .bindPlayerInventory(entityPlayer.inventory, 147)
+                .build(getHolder(), entityPlayer);
     }
 
     private int getMaxPumpRange() {
@@ -154,30 +171,40 @@ public class MetaTileEntityPump extends TieredMetaTileEntity {
     private boolean isStraightInPumpRange(BlockPos checkPos) {
         BlockPos pos = getPos();
         return checkPos.getX() == pos.getX() &&
-            checkPos.getZ() == pos.getZ() &&
-            pos.getY() < checkPos.getY() &&
-            pos.getY() + pumpHeadY >= checkPos.getY();
+                checkPos.getZ() == pos.getZ() &&
+                pos.getY() < checkPos.getY() &&
+                pos.getY() + pumpHeadY >= checkPos.getY();
+    }
+
+    private BlockPos getValidPos(Deque<BlockPos> posDeque) {
+        BlockPos checkPos = null;
+        int amountIterated = 0;
+        do {
+            if (checkPos != null) {
+                blocksToCheck.push(checkPos);
+                amountIterated++;
+            }
+            checkPos = blocksToCheck.poll();
+
+        } while (checkPos != null &&
+                !getWorld().isBlockLoaded(checkPos) &&
+                amountIterated < blocksToCheck.size());
+        return checkPos;
     }
 
     private void updateQueueState(int blocksToCheckAmount) {
         BlockPos selfPos = getPos().down(pumpHeadY);
 
-        for(int i = 0; i < blocksToCheckAmount; i++) {
-            BlockPos checkPos = null;
-            int amountIterated = 0;
-            do {
-                if (checkPos != null) {
-                    blocksToCheck.push(checkPos);
-                    amountIterated++;
-                }
-                checkPos = blocksToCheck.poll();
-
-            } while (checkPos != null &&
-                !getWorld().isBlockLoaded(checkPos) &&
-                amountIterated < blocksToCheck.size());
+        for (int i = 0; i < blocksToCheckAmount; i++) {
+            BlockPos checkPos = getValidPos(blocksToCheck);
             if (checkPos != null) {
                 checkFluidBlockAt(selfPos, checkPos);
-            } else break;
+            } else {
+                checkPos = getValidPos(blocksToReCheck);
+                if (checkPos != null) {
+                    reCheckFluidBlockAt(selfPos, checkPos);
+                } else break;
+            }
         }
 
         if (fluidSourceBlocks.isEmpty()) {
@@ -186,8 +213,8 @@ public class MetaTileEntityPump extends TieredMetaTileEntity {
                 if (downPos != null && downPos.getY() >= 0) {
                     IBlockState downBlock = getWorld().getBlockState(downPos);
                     if (downBlock.getBlock() instanceof BlockLiquid ||
-                        downBlock.getBlock() instanceof IFluidBlock ||
-                        !downBlock.isTopSolid()) {
+                            downBlock.getBlock() instanceof IFluidBlock ||
+                            !downBlock.isTopSolid()) {
                         this.pumpHeadY++;
                     }
                 }
@@ -212,25 +239,53 @@ public class MetaTileEntityPump extends TieredMetaTileEntity {
         boolean shouldCheckNeighbours = isStraightInPumpRange(checkPos);
 
         if (blockHere.getBlock() instanceof BlockLiquid ||
-            blockHere.getBlock() instanceof IFluidBlock) {
+                blockHere.getBlock() instanceof IFluidBlock) {
             IFluidHandler fluidHandler = FluidUtil.getFluidHandler(getWorld(), checkPos, null);
             FluidStack drainStack = fluidHandler.drain(Integer.MAX_VALUE, false);
-            if (drainStack != null && drainStack.amount > 0) {
+            if (drainStack != null && drainStack.amount > 0 && this.fluidFilter.testFluidStack(drainStack)) {
                 this.fluidSourceBlocks.add(checkPos);
             }
             shouldCheckNeighbours = true;
         }
 
         if (shouldCheckNeighbours) {
-            int maxPumpRange = getMaxPumpRange();
-            for (EnumFacing facing : EnumFacing.VALUES) {
-                BlockPos offsetPos = checkPos.offset(facing);
-                if (offsetPos.distanceSq(pumpHeadPos) > maxPumpRange * maxPumpRange)
-                    continue; //do not add blocks outside bounds
-                if (!fluidSourceBlocks.contains(offsetPos) &&
-                    !blocksToCheck.contains(offsetPos)) {
+            checkNeighbours(pumpHeadPos, checkPos);
+        }
+    }
+
+    private void reCheckFluidBlockAt(BlockPos pumpHeadPos, BlockPos checkPos) {
+        IBlockState blockHere = getWorld().getBlockState(checkPos);
+        boolean shouldCheckNeighbours = isStraightInPumpRange(checkPos);
+
+        if (blockHere.getBlock() instanceof BlockLiquid ||
+                blockHere.getBlock() instanceof IFluidBlock) {
+            IFluidHandler fluidHandler = FluidUtil.getFluidHandler(getWorld(), checkPos, null);
+            FluidStack drainStack = fluidHandler.drain(Integer.MAX_VALUE, false);
+            if (drainStack != null && drainStack.amount > 0 && this.fluidFilter.testFluidStack(drainStack)) {
+                this.fluidSourceBlocks.add(checkPos);
+                shouldCheckNeighbours = true;
+            }
+        }
+
+        if (shouldCheckNeighbours) {
+            checkNeighbours(pumpHeadPos, checkPos);
+        }
+    }
+
+    private void checkNeighbours(BlockPos pumpHeadPos, BlockPos checkPos) {
+        int maxPumpRange = getMaxPumpRange();
+        for (EnumFacing facing : EnumFacing.VALUES) {
+            BlockPos offsetPos = checkPos.offset(facing);
+            if (offsetPos.distanceSq(pumpHeadPos) > maxPumpRange * maxPumpRange)
+                continue; //do not add blocks outside bounds
+            if (!fluidSourceBlocks.contains(offsetPos) && !blocksToCheck.contains(offsetPos) && !blocksToReCheck.contains(offsetPos)) {
+
+                if (offsetPos.distanceSq(pumpHeadPos) > checkPos.distanceSq(pumpHeadPos)) {
                     this.blocksToCheck.add(offsetPos);
+                } else {
+                    this.blocksToReCheck.add(offsetPos);
                 }
+
             }
         }
     }
@@ -240,10 +295,10 @@ public class MetaTileEntityPump extends TieredMetaTileEntity {
         if (fluidBlockPos == null) return;
         IBlockState blockHere = getWorld().getBlockState(fluidBlockPos);
         if (blockHere.getBlock() instanceof BlockLiquid ||
-            blockHere.getBlock() instanceof IFluidBlock) {
+                blockHere.getBlock() instanceof IFluidBlock) {
             IFluidHandler fluidHandler = FluidUtil.getFluidHandler(getWorld(), fluidBlockPos, null);
             FluidStack drainStack = fluidHandler.drain(Integer.MAX_VALUE, false);
-            if (drainStack != null && exportFluids.fill(drainStack, false) == drainStack.amount) {
+            if (drainStack != null && exportFluids.fill(drainStack, false) == drainStack.amount && this.fluidFilter.testFluidStack(drainStack)) {
                 exportFluids.fill(drainStack, true);
                 fluidHandler.drain(drainStack.amount, true);
                 this.fluidSourceBlocks.remove(fluidBlockPos);
@@ -265,8 +320,10 @@ public class MetaTileEntityPump extends TieredMetaTileEntity {
         pushFluidsIntoNearbyHandlers(getFrontFacing());
         fillContainerFromInternalTank(importItems, exportItems, 0, 0);
         updateQueueState(getTier());
+      
         if (getOffsetTimer() % getPumpingCycleLength() == 0 && !fluidSourceBlocks.isEmpty() &&
             energyContainer.getEnergyStored() >= GTValues.V[getTier()]) {
+
             tryPumpFirstBlock();
         }
     }
@@ -279,6 +336,7 @@ public class MetaTileEntityPump extends TieredMetaTileEntity {
     public NBTTagCompound writeToNBT(NBTTagCompound data) {
         super.writeToNBT(data);
         data.setInteger("PumpHeadDepth", pumpHeadY);
+        data.setTag("Filter", fluidFilter.serializeNBT());
         return data;
     }
 
@@ -286,6 +344,9 @@ public class MetaTileEntityPump extends TieredMetaTileEntity {
     public void readFromNBT(NBTTagCompound data) {
         super.readFromNBT(data);
         this.pumpHeadY = data.getInteger("PumpHeadDepth");
+        if (data.hasKey("Filter")) {
+            this.fluidFilter.deserializeNBT(data.getCompoundTag("Filter"));
+        }
     }
 
     @Override
@@ -296,5 +357,14 @@ public class MetaTileEntityPump extends TieredMetaTileEntity {
         tooltip.add(I18n.format("gregtech.universal.tooltip.voltage_in", energyContainer.getInputVoltage(), GTValues.VN[getTier()]));
         tooltip.add(I18n.format("gregtech.universal.tooltip.energy_storage_capacity", energyContainer.getEnergyCapacity()));
         tooltip.add(I18n.format("gregtech.universal.tooltip.fluid_storage_capacity", exportFluids.getTankAt(0).getCapacity()));
+    }
+
+    @Override
+    public void markAsDirty() {
+        // Empty the different queues when a filter is added, removed or switched from whitelist to blacklist
+        while (fluidSourceBlocks.poll() != null) ;
+        while (blocksToReCheck.poll() != null) ;
+        while (blocksToCheck.poll() != null) ;
+        this.markDirty();
     }
 }
