@@ -30,6 +30,11 @@ public class FuelRecipeLogic extends MTETrait implements IControllable, IFuelabl
 
     private int recipeDurationLeft;
     private long recipeOutputVoltage;
+    private long outputVoltage;
+    private boolean canProduceEnergy;
+    private boolean canProgress;
+    private int recipeDuration;
+    private int fuelAmount;
 
     private boolean isActive;
     private boolean workingEnabled = true;
@@ -43,8 +48,25 @@ public class FuelRecipeLogic extends MTETrait implements IControllable, IFuelabl
         this.maxVoltage = maxVoltage;
     }
 
+    /**
+     * Deprecated please use {@link #getOutputVoltage} to get the output voltage.
+     * overrides of this method should get moved to {@link #calculateRecipeOutputVoltage()}
+     */
+    @Deprecated
     public long getRecipeOutputVoltage() {
-        return recipeOutputVoltage;
+        return this.outputVoltage;
+    }
+
+    public long getOutputVoltage() {
+        return this.outputVoltage;
+    }
+
+    public boolean hasProducedEnergy() {
+        return this.canProduceEnergy;
+    }
+
+    public boolean hasRecipeProgressed() {
+        return this.canProgress;
     }
 
     @Override
@@ -88,8 +110,7 @@ public class FuelRecipeLogic extends MTETrait implements IControllable, IFuelabl
             if (fuelInfo == null) {
                 fuelInfo = new FluidFuelInfo(tankContents, fuelRemaining, fuelCapacity, amountPerRecipe, fuelBurnTime);
                 fuels.put(tankContents.getUnlocalizedName(), fuelInfo);
-            }
-            else {
+            } else {
                 fuelInfo.addFuelRemaining(fuelRemaining);
                 fuelInfo.addFuelBurnTime(fuelBurnTime);
             }
@@ -99,10 +120,10 @@ public class FuelRecipeLogic extends MTETrait implements IControllable, IFuelabl
 
     @Override
     public <T> T getCapability(Capability<T> capability) {
-        if(capability == GregtechTileCapabilities.CAPABILITY_CONTROLLABLE) {
+        if (capability == GregtechTileCapabilities.CAPABILITY_CONTROLLABLE) {
             return GregtechTileCapabilities.CAPABILITY_CONTROLLABLE.cast(this);
         }
-        if(capability == GregtechCapabilities.CAPABILITY_FUELABLE) {
+        if (capability == GregtechCapabilities.CAPABILITY_FUELABLE) {
             return GregtechCapabilities.CAPABILITY_FUELABLE.cast(this);
         }
         return null;
@@ -111,18 +132,33 @@ public class FuelRecipeLogic extends MTETrait implements IControllable, IFuelabl
     @Override
     public void update() {
         if (getMetaTileEntity().getWorld().isRemote) return;
+
         if (workingEnabled) {
-            if (recipeDurationLeft > 0) {
-                if (energyContainer.get().getEnergyCanBeInserted() >=
-                    recipeOutputVoltage || shouldVoidExcessiveEnergy()) {
-                    energyContainer.get().addEnergy(recipeOutputVoltage);
-                    if (--this.recipeDurationLeft == 0) {
-                        this.wasActiveAndNeedsUpdate = true;
-                    }
-                }
+
+            /* we need to compute those two before doing anything
+             * to avoid loosing 1 tick of production
+             */
+
+            this.canProduceEnergy = canProduceEnergy();
+
+            this.canProgress = canRecipeProgress();
+
+            if (this.canProgress) {
+                --this.recipeDurationLeft;
             }
-            if (recipeDurationLeft == 0 && isReadyForRecipes()) {
-                tryAcquireNewRecipe();
+
+            if (this.canProduceEnergy) {
+                this.outputVoltage = calculateRecipeOutputVoltage();
+                energyContainer.get().addEnergy(outputVoltage);
+            }
+
+            if (this.recipeDurationLeft <= 0) {
+                if (isActive) {
+                    this.wasActiveAndNeedsUpdate = true;
+                }
+                if (isReadyForRecipes()) {
+                    tryAcquireNewRecipe();
+                }
             }
         }
         if (wasActiveAndNeedsUpdate) {
@@ -132,7 +168,11 @@ public class FuelRecipeLogic extends MTETrait implements IControllable, IFuelabl
     }
 
     protected boolean isReadyForRecipes() {
-       return true;
+        return true;
+    }
+
+    protected boolean shouldRecipeProgressWhenNotProducingEnergy() {
+        return false;
     }
 
     protected boolean shouldVoidExcessiveEnergy() {
@@ -171,16 +211,17 @@ public class FuelRecipeLogic extends MTETrait implements IControllable, IFuelabl
             }
         }
         if (currentRecipe != null && checkRecipe(currentRecipe)) {
-            int fuelAmountToUse = calculateFuelAmount(currentRecipe);
-            if (fluidStack.amount >= fuelAmountToUse) {
+            this.fuelAmount = calculateFuelAmount(currentRecipe);
+            if (fluidStack.amount >= this.fuelAmount) {
                 this.recipeDurationLeft = calculateRecipeDuration(currentRecipe);
-                this.recipeOutputVoltage = startRecipe(currentRecipe, fuelAmountToUse, recipeDurationLeft);
+                this.recipeDuration = this.recipeDurationLeft;
+                this.recipeOutputVoltage = startRecipe(currentRecipe, fuelAmount, recipeDurationLeft);
                 if (wasActiveAndNeedsUpdate) {
                     this.wasActiveAndNeedsUpdate = false;
                 } else {
                     setActive(true);
                 }
-                return fuelAmountToUse;
+                return this.fuelAmount;
             }
         }
         return 0;
@@ -211,14 +252,36 @@ public class FuelRecipeLogic extends MTETrait implements IControllable, IFuelabl
         return currentRecipe.getRecipeFluid().amount * getVoltageMultiplier(getMaxVoltage(), currentRecipe.getMinVoltage());
     }
 
+    public int getFuelAmount() {
+        return this.fuelAmount;
+    }
+
     protected int calculateRecipeDuration(FuelRecipe currentRecipe) {
         return currentRecipe.getDuration();
     }
 
+    public int getRecipeDuration() {
+        return this.recipeDuration;
+    }
+
+    public boolean canProduceEnergy() {
+        return this.recipeDurationLeft > 0 && energyContainer.get().getEnergyCanBeInserted() >= calculateRecipeOutputVoltage() ||
+                shouldVoidExcessiveEnergy();
+    }
+
+    public boolean canRecipeProgress() {
+        return this.recipeDurationLeft > 0 && (shouldRecipeProgressWhenNotProducingEnergy() || canProduceEnergy());
+    }
+
+    protected long calculateRecipeOutputVoltage() {
+        return this.recipeOutputVoltage;
+    }
+
     /**
-     * Performs preparations for starting given recipe and determines it's output voltage
+     * Performs preparations for starting given recipe and determines it's base output voltage
+     * further computation can be done in {@link #calculateRecipeOutputVoltage}
      *
-     * @return recipe's output voltage
+     * @return recipe's base output voltage
      */
     protected long startRecipe(FuelRecipe currentRecipe, int fuelAmountUsed, int recipeDuration) {
         return getMaxVoltage();
@@ -243,6 +306,7 @@ public class FuelRecipeLogic extends MTETrait implements IControllable, IFuelabl
             writeCustomData(1, buf -> buf.writeBoolean(active));
         }
     }
+
 
     @Override
     public void setWorkingEnabled(boolean workingEnabled) {
@@ -278,7 +342,7 @@ public class FuelRecipeLogic extends MTETrait implements IControllable, IFuelabl
         NBTTagCompound compound = new NBTTagCompound();
         compound.setBoolean("WorkEnabled", this.workingEnabled);
         compound.setInteger("RecipeDurationLeft", this.recipeDurationLeft);
-        if (recipeDurationLeft > 0) {
+        if (this.recipeDurationLeft > 0) {
             compound.setLong("RecipeOutputVoltage", this.recipeOutputVoltage);
         }
         return compound;
@@ -291,10 +355,10 @@ public class FuelRecipeLogic extends MTETrait implements IControllable, IFuelabl
             this.workingEnabled = compound.getBoolean("WorkEnabled");
         }
         this.recipeDurationLeft = compound.getInteger("RecipeDurationLeft");
-        if (recipeDurationLeft > 0) {
+        if (this.recipeDurationLeft > 0) {
             this.recipeOutputVoltage = compound.getLong("RecipeOutputVoltage");
         }
-        this.isActive = recipeDurationLeft > 0;
+        this.isActive = this.recipeDurationLeft > 0;
     }
 
 }
