@@ -32,7 +32,10 @@ public class FluidNetTank extends FluidTank {
             handle.destroyNetwork(isLeakingPipe, isBurningPipe);
             return copyStack.amount;
         }
-        return super.fill(copyStack, doFill);
+        int result = super.fill(copyStack, doFill);
+        if (result != 0 && doFill)
+            this.handle.markDirty();
+        return result;
     }
 
     @Override
@@ -47,6 +50,7 @@ public class FluidNetTank extends FluidTank {
         resource.amount = originalAmount;
         if (resultDrained != null && doDrain) {
             drainedThisTick.increment(handle.getWorldData(), resultDrained.amount);
+            this.handle.markDirty();
         }
         return resultDrained;
     }
@@ -61,6 +65,7 @@ public class FluidNetTank extends FluidTank {
         FluidStack resultDrained = super.drain(maxDrain, doDrain);
         if (resultDrained != null && doDrain) {
             drainedThisTick.increment(handle.getWorldData(), resultDrained.amount);
+            this.handle.markDirty();
         }
         return resultDrained;
     }
@@ -69,6 +74,7 @@ public class FluidNetTank extends FluidTank {
         this.capacity = newTankCapacity;
         if (this.fluid != null) {
             this.fluid.amount = Math.min(this.fluid.amount, newTankCapacity);
+            this.handle.markDirty();
         }
     }
 

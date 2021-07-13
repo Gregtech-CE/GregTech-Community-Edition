@@ -9,27 +9,38 @@ import net.minecraft.world.World;
 import net.minecraft.world.storage.WorldSavedData;
 import net.minecraftforge.common.util.Constants.NBT;
 
+import java.lang.ref.WeakReference;
 import java.util.*;
+
+import gregtech.api.util.GTLog;
 
 public abstract class WorldPipeNet<NodeDataType, T extends PipeNet<NodeDataType>> extends WorldSavedData {
 
-    private World world;
-    protected boolean isFirstTick = true;
+    private WeakReference<World> worldRef = new WeakReference<>(null);
     protected List<T> pipeNets = new ArrayList<>();
     protected Map<ChunkPos, List<T>> pipeNetsByChunk = new HashMap<>();
+    protected WorldPipeNet<NodeDataType, T> oldData = null;
+    protected boolean checkedForOldData = false;
+
+    public static String getDataID(final String baseID, final World world) {
+        if (world == null || world.isRemote)
+            throw new RuntimeException("WorldPipeNet should only be created on the server!");
+        final int dimension = world.provider.getDimension();
+        return baseID + '.' + dimension;
+    }
 
     public WorldPipeNet(String name) {
         super(name);
     }
 
     public World getWorld() {
-        return world;
+        return this.worldRef.get();
     }
 
     protected void setWorldAndInit(World world) {
-        if (isFirstTick) {
-            this.world = world;
-            this.isFirstTick = false;
+        // Reset the world as the dimensions are loaded/unloaded
+        if (world != this.worldRef.get()) {
+            this.worldRef = new WeakReference<World>(world);
             onWorldSet();
         }
     }
@@ -101,7 +112,7 @@ public abstract class WorldPipeNet<NodeDataType, T extends PipeNet<NodeDataType>
             if (pipeNet.containsNode(blockPos))
                 return pipeNet;
         }
-        return null;
+        return checkForOldData(blockPos);
     }
 
     protected void addPipeNet(T pipeNet) {
@@ -121,6 +132,42 @@ public abstract class WorldPipeNet<NodeDataType, T extends PipeNet<NodeDataType>
     }
 
     protected abstract T createNetInstance();
+
+    /*
+     * This method is used when data cannot be found at the given position.
+     *
+     * It's purpose is to move pipenets from the old data file to new one based on matching block position
+     */
+    private T checkForOldData(final BlockPos blockPos) {
+        // No old data
+        if (this.oldData == null || this.oldData.pipeNets.isEmpty())
+            return null;
+
+        // See if we have a pipenet for this block pos in the old data
+        T foundOldData = null;
+        final List<T> oldPipeNets = this.oldData.pipeNetsByChunk.getOrDefault(new ChunkPos(blockPos), Collections.emptyList());
+        for (T pipeNet : oldPipeNets) {
+            if (pipeNet.containsNode(blockPos)) {
+                if (foundOldData != null) {
+                    // We have 2 pipenets at this position?
+                    GTLog.logger.warn("Found duplicate pipenets in old data at {} [{},{}]", blockPos, foundOldData, pipeNet);
+                    return null;
+                }
+                foundOldData = pipeNet;
+            }
+        }
+        // Nothing found
+        if (foundOldData == null)
+            return null;
+        // Move the old data into the new data
+        GTLog.logger.info("Fixing old data for {} found at {}", foundOldData, blockPos);
+        this.oldData.removePipeNet(foundOldData);
+        this.oldData.markDirty();
+        this.addPipeNetSilently(foundOldData);
+        this.markDirty();
+        foundOldData.setWorldData(this);
+        return foundOldData;
+    }
 
     @Override
     public void readFromNBT(NBTTagCompound nbt) {

@@ -13,6 +13,7 @@ import net.minecraft.util.EnumFacing;
 import net.minecraft.util.EnumParticleTypes;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
+import net.minecraftforge.common.util.Constants.NBT;
 import net.minecraftforge.fluids.FluidStack;
 import net.minecraftforge.fluids.FluidTank;
 
@@ -109,6 +110,10 @@ public class FluidPipeNet extends MonolithicPipeNet<FluidPipeProperties> {
         }
     }
 
+    protected void markDirty() {
+        this.worldData.markDirty();
+    }
+
     @Override
     protected boolean areNodesCustomContactable(FluidPipeProperties first, FluidPipeProperties second, PipeNet<FluidPipeProperties> secondNodeNet) {
         FluidPipeNet fluidPipeNet = (FluidPipeNet) secondNodeNet;
@@ -132,4 +137,17 @@ public class FluidPipeNet extends MonolithicPipeNet<FluidPipeProperties> {
         return new FluidPipeProperties(maxTemperature, throughput, gasProof);
     }
 
+    @Override
+    public NBTTagCompound serializeNBT() {
+        final NBTTagCompound nbt = super.serializeNBT();
+        nbt.setTag("FluidNetTank", this.fluidNetTank.writeToNBT(new NBTTagCompound()));
+        return nbt;
+    }
+
+    @Override
+    public void deserializeNBT(final NBTTagCompound nbt) {
+        super.deserializeNBT(nbt);
+        if (nbt.hasKey("FluidNetTank", NBT.TAG_COMPOUND))
+            this.fluidNetTank.readFromNBT(nbt.getCompoundTag("FluidNetTank"));
+    }
 }

@@ -19,7 +19,7 @@ import java.util.Map.Entry;
 
 public abstract class PipeNet<NodeDataType> implements INBTSerializable<NBTTagCompound> {
 
-    protected final WorldPipeNet<NodeDataType, PipeNet<NodeDataType>> worldData;
+    protected WorldPipeNet<NodeDataType, PipeNet<NodeDataType>> worldData;
     private final Map<BlockPos, Node<NodeDataType>> nodeByBlockPos = new HashMap<>();
     private final Map<BlockPos, Node<NodeDataType>> unmodifiableNodeByBlockPos = Collections.unmodifiableMap(nodeByBlockPos);
     private final Map<ChunkPos, Integer> ownedChunks = new HashMap<>();
@@ -29,6 +29,12 @@ public abstract class PipeNet<NodeDataType> implements INBTSerializable<NBTTagCo
     public PipeNet(WorldPipeNet<NodeDataType, ? extends PipeNet> world) {
         //noinspection unchecked
         this.worldData = (WorldPipeNet<NodeDataType, PipeNet<NodeDataType>>) world;
+    }
+
+    void setWorldData(WorldPipeNet<NodeDataType, ? extends PipeNet> worldData) {
+        this.worldData = (WorldPipeNet<NodeDataType, PipeNet<NodeDataType>>) worldData;
+        // Duplicated from WorldPipeNet.onWorldSet()
+        onConnectionsUpdate();
     }
 
     public Set<ChunkPos> getContainedChunks() {
