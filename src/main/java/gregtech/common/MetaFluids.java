@@ -1,5 +1,6 @@
 package gregtech.common;
 
+import com.mojang.realmsclient.gui.ChatFormatting;
 import gregtech.api.GTValues;
 import gregtech.api.unification.material.Materials;
 import gregtech.api.unification.material.type.FluidMaterial;
@@ -146,12 +147,12 @@ public class MetaFluids {
                 int temperature = fluidMaterial.getFluidTemperature();
                 Fluid fluid = registerFluid(fluidMaterial, FluidType.NORMAL, temperature);
                 fluidMaterial.setMaterialFluid(fluid);
-                FluidTooltipUtil.registerTooltip(fluid, fluidMaterial.chemicalFormula);
+                FluidTooltipUtil.registerTooltip(fluid, ChatFormatting.GRAY + fluidMaterial.chemicalFormula);
             }
             if (fluidMaterial.shouldGeneratePlasma() && fluidMaterial.getMaterialPlasma() == null) {
                 Fluid fluid = registerFluid(fluidMaterial, FluidType.PLASMA, 30000);
                 fluidMaterial.setMaterialPlasma(fluid);
-                FluidTooltipUtil.registerTooltip(fluid, fluidMaterial.chemicalFormula);
+                FluidTooltipUtil.registerTooltip(fluid, ChatFormatting.GRAY + fluidMaterial.chemicalFormula);
             }
         }
     }

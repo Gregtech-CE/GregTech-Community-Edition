@@ -1,5 +1,7 @@
 package gregtech.api.util;
 
+import com.google.common.collect.Lists;
+import com.mojang.realmsclient.gui.ChatFormatting;
 import gregtech.api.unification.material.Materials;
 import gregtech.api.unification.stack.MaterialStack;
 import net.minecraftforge.fluids.Fluid;
@@ -7,6 +9,7 @@ import net.minecraftforge.fluids.FluidRegistry;
 import net.minecraftforge.fluids.FluidStack;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 public class FluidTooltipUtil {
@@ -14,7 +17,7 @@ public class FluidTooltipUtil {
     /**
      * Registry Mapping of <Fluid, Tooltip>
      */
-    private static final Map<Fluid, String> tooltips = new HashMap<>();
+    private static final Map<Fluid, List<String>> tooltips = new HashMap<>();
 
     /**
      * Used to register a tooltip to a Fluid. A Fluid can only have one tooltip, on one line.
@@ -22,16 +25,31 @@ public class FluidTooltipUtil {
      * Ignores a tooltip applied for Water, so that it will be handled correctly for the chemical formula.
      *
      * @param fluid   The fluid to register a tooltip for.
-     * @param tooltip The tooltip.
+     * @param tooltips The tooltip.
      * @return        False if either parameter is null or if tooltip is empty, true otherwise.
      */
+    public static boolean registerTooltip(Fluid fluid, List<String> tooltips) {
+        if (fluid != null && tooltips != null && !tooltips.isEmpty()) {
+            for (String tooltip : tooltips) {
+                registerTooltip(fluid, tooltip);
+            }
+        }
+        return false;
+    }
+
     public static boolean registerTooltip(Fluid fluid, String tooltip) {
-        if (fluid != null && tooltip != null && !tooltip.isEmpty()) {
-            tooltips.put(fluid, tooltip);
+        if (fluid != null && tooltip != null && !tooltip.trim().isEmpty()) {
+            if(tooltips.containsKey(fluid)) {
+                tooltips.get(fluid).add(tooltip);
+            } else {
+                tooltips.put(fluid, Lists.newArrayList(tooltip));
+            }
             return true;
         }
         return false;
     }
+
+
 
     /**
      * Used to get a Fluid's tooltip.
@@ -39,11 +57,19 @@ public class FluidTooltipUtil {
      * @param fluid The Fluid to get the tooltip of.
      * @return      The tooltip.
      */
-    public static String getFluidTooltip(Fluid fluid) {
+    public static List<String> getFluidTooltips(Fluid fluid) {
         if (fluid == null)
             return null;
 
         return tooltips.get(fluid);
+    }
+
+    @Deprecated
+    public static String getFluidTooltip(Fluid fluid) {
+        if (fluid == null)
+            return null;
+
+        return tooltips.get(fluid).get(1);
     }
 
     /**
@@ -52,6 +78,14 @@ public class FluidTooltipUtil {
      * @param stack A FluidStack, containing the Fluid to get the tooltip of.
      * @return      The tooltip.
      */
+    public static List<String> getFluidTooltips(FluidStack stack) {
+        if (stack == null)
+            return null;
+
+        return getFluidTooltips(stack.getFluid());
+    }
+
+    @Deprecated
     public static String getFluidTooltip(FluidStack stack) {
         if (stack == null)
             return null;
@@ -65,6 +99,14 @@ public class FluidTooltipUtil {
      * @param fluidName A String representing a Fluid to get the tooltip of.
      * @return          The tooltip.
      */
+    public static List<String> getFluidTooltips(String fluidName) {
+        if (fluidName == null || fluidName.isEmpty())
+            return null;
+
+        return getFluidTooltips(FluidRegistry.getFluid(fluidName));
+    }
+
+    @Deprecated
     public static String getFluidTooltip(String fluidName) {
         if (fluidName == null || fluidName.isEmpty())
             return null;
@@ -79,6 +121,6 @@ public class FluidTooltipUtil {
      */
     public static String getWaterTooltip() {
         // Done like this to not return parenthesis around the tooltip
-        return (new MaterialStack(Materials.Hydrogen, 2)).toString() + "O";
+        return (ChatFormatting.GRAY + (new MaterialStack(Materials.Hydrogen, 2)).toString() + "O");
     }
 }
