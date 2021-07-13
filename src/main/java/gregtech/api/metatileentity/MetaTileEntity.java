@@ -10,7 +10,9 @@ import codechicken.lib.vec.Cuboid6;
 import codechicken.lib.vec.Matrix4;
 import com.google.common.base.Preconditions;
 import gregtech.api.GregTechAPI;
+import gregtech.api.capability.ConfigurationContext;
 import gregtech.api.capability.GregtechTileCapabilities;
+import gregtech.api.capability.IConfigurable;
 import gregtech.api.capability.IEnergyContainer;
 import gregtech.api.capability.impl.FluidHandlerProxy;
 import gregtech.api.capability.impl.FluidTankList;
@@ -58,7 +60,7 @@ import java.util.function.Consumer;
 
 import static gregtech.api.util.InventoryUtils.simulateItemStackMerge;
 
-public abstract class MetaTileEntity implements ICoverable {
+public abstract class MetaTileEntity implements ICoverable, IConfigurable {
 
     public static final int DEFAULT_PAINTING_COLOR = 0xFFFFFF;
     public static final IndexedCuboid6 FULL_CUBE_COLLISION = new IndexedCuboid6(null, Cuboid6.full);
@@ -804,6 +806,7 @@ public abstract class MetaTileEntity implements ICoverable {
         return originalCapability;
     }
 
+    @Override
     public <T> T getCapability(Capability<T> capability, EnumFacing side) {
         if (capability == GregtechTileCapabilities.CAPABILITY_COVERABLE) {
             return GregtechTileCapabilities.CAPABILITY_COVERABLE.cast(this);
@@ -1147,6 +1150,45 @@ public abstract class MetaTileEntity implements ICoverable {
         }
 
         this.isFragile = data.getBoolean(TAG_KEY_FRAGILE);
+    }
+
+    @Override
+    public ResourceLocation getConfigurationID() {
+        return this.metaTileEntityId;
+    }
+
+    @Override
+    public String getConfigurationName() {
+        // FIXME: how to do this properly?
+        return String.format("%s.name", getStackForm().getTranslationKey());
+    }
+
+    @Override
+    public NBTTagCompound copyConfiguration(final ConfigurationContext context) {
+        final NBTTagCompound data = new NBTTagCompound();
+        data.setInteger("FrontFacing", this.frontFacing.getIndex());
+
+        for (MTETrait mteTrait : this.mteTraits) {
+            if (mteTrait.isConfigurable()) {
+                data.setTag(mteTrait.getName(), mteTrait.copyConfiguration(context));
+            }
+        }
+        return data;
+    }
+
+    @Override
+    public void pasteConfiguration(final ConfigurationContext context, final NBTTagCompound data) {
+        setFrontFacing(EnumFacing.VALUES[data.getInteger("FrontFacing")]);
+
+        // Review: Is it possible to have mismatched traits?
+        for (MTETrait mteTrait : this.mteTraits) {
+            if (mteTrait.isConfigurable()) {
+                final NBTTagCompound traitCompound = data.getCompoundTag(mteTrait.getName());
+                if (traitCompound != null) {
+                    mteTrait.pasteConfiguration(context, traitCompound);
+                }
+            }
+        }
     }
 
     @Override

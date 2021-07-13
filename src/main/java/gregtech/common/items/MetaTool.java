@@ -3,6 +3,7 @@ package gregtech.common.items;
 import gregtech.api.GTValues;
 import gregtech.api.items.ToolDictNames;
 import gregtech.api.items.metaitem.ElectricStats;
+import gregtech.api.items.toolitem.ConfiguratorItemStat;
 import gregtech.api.items.toolitem.ScrewdriverItemStat;
 import gregtech.api.items.toolitem.SoftMalletItemStat;
 import gregtech.api.items.toolitem.ToolMetaItem;
@@ -70,7 +71,9 @@ public class MetaTool extends ToolMetaItem<ToolMetaItem<?>.MetaToolValueItem> {
 
         FILE = addItem(9, "tool.file").setToolStats(new ToolFile())
             .setFullRepairCost(2)
-            .addOreDict(ToolDictNames.craftingToolFile);
+            .addOreDict(ToolDictNames.craftingToolFile)
+            // FIXME file is not the configurator
+            .addComponents(new ConfiguratorItemStat().advanced());
 
         CROWBAR = addItem(10, "tool.crowbar").setToolStats(new ToolCrowbar())
             .setFullRepairCost(1.5)

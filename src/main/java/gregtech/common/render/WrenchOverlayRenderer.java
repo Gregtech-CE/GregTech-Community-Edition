@@ -93,8 +93,10 @@ public class WrenchOverlayRenderer {
     }
 
     public static boolean shouldDrawOverlayForItem(ItemStack itemStack, TileEntity tileEntity) {
-        if(tileEntity instanceof MetaTileEntityHolder &&
-            itemStack.hasCapability(GregtechCapabilities.CAPABILITY_WRENCH, null)) {
+        if (tileEntity instanceof MetaTileEntityHolder && (
+                itemStack.hasCapability(GregtechCapabilities.CAPABILITY_WRENCH, null) ||
+                itemStack.hasCapability(GregtechCapabilities.CAPABILITY_CONFIGURATOR, null)
+                )) {
             return true;
         }
         if(tileEntity.hasCapability(GregtechTileCapabilities.CAPABILITY_COVERABLE, null)) {

@@ -7,6 +7,8 @@ import net.minecraftforge.common.capabilities.Capability;
 
 import java.util.function.Consumer;
 
+import gregtech.api.capability.ConfigurationContext;
+
 public abstract class MTETrait {
 
     protected MetaTileEntity metaTileEntity;
@@ -37,6 +39,20 @@ public abstract class MTETrait {
     }
 
     public void deserializeNBT(NBTTagCompound compound) {
+    }
+
+    @SuppressWarnings("static-method")
+    protected boolean isConfigurable() {
+        return false;
+    }
+
+    @SuppressWarnings("static-method")
+    public NBTTagCompound copyConfiguration(final ConfigurationContext context) {
+        return new NBTTagCompound();
+    }
+
+    public void pasteConfiguration(final ConfigurationContext context, final NBTTagCompound compound) {
+        // nothing by default
     }
 
     public void writeInitialData(PacketBuffer buffer) {

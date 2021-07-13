@@ -1,6 +1,7 @@
 package gregtech.api.capability.impl;
 
 import gregtech.api.GTValues;
+import gregtech.api.capability.ConfigurationContext;
 import gregtech.api.capability.GregtechTileCapabilities;
 import gregtech.api.capability.IMultipleTankHandler;
 import gregtech.api.capability.IWorkable;
@@ -504,4 +505,30 @@ public abstract class AbstractRecipeLogic extends MTETrait implements IWorkable 
         }
     }
 
+    @Override
+    protected boolean isConfigurable() {
+        return true;
+    }
+
+    @Override
+    public NBTTagCompound copyConfiguration(final ConfigurationContext context) {
+        final NBTTagCompound compound = super.copyConfiguration(context);
+        compound.setBoolean(ALLOW_OVERCLOCKING, this.allowOverclocking);
+        compound.setLong(OVERCLOCK_VOLTAGE, this.overclockVoltage);
+        return compound;
+    }
+
+    @Override
+    public void pasteConfiguration(final ConfigurationContext context, final NBTTagCompound compound) {
+        super.pasteConfiguration(context, compound);
+        if (compound.hasKey(ALLOW_OVERCLOCKING)) {
+            setAllowOverclocking(compound.getBoolean(ALLOW_OVERCLOCKING));
+        }
+        if (compound.hasKey(OVERCLOCK_VOLTAGE)) {
+            this.overclockVoltage = compound.getLong(OVERCLOCK_VOLTAGE);
+        } else {
+            // Calculate overclock voltage based on old allow flag
+            this.overclockVoltage = this.allowOverclocking ? getMaxVoltage() : 0;
+        }
+    }
 }

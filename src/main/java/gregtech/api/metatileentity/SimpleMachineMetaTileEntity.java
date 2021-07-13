@@ -4,6 +4,7 @@ import codechicken.lib.raytracer.CuboidRayTraceResult;
 import codechicken.lib.render.CCRenderState;
 import codechicken.lib.render.pipeline.IVertexOperation;
 import codechicken.lib.vec.Matrix4;
+import gregtech.api.capability.ConfigurationContext;
 import gregtech.api.capability.GregtechTileCapabilities;
 import gregtech.api.capability.IActiveOutputSide;
 import gregtech.api.capability.impl.EnergyContainerHandler;
@@ -185,7 +186,10 @@ public class SimpleMachineMetaTileEntity extends WorkableTieredMetaTileEntity im
                 return GregtechTileCapabilities.CAPABILITY_ACTIVE_OUTPUT_SIDE.cast(this);
             }
             return null;
+        } else if (capability == GregtechTileCapabilities.CAPABILITY_CONFIGURABLE) {
+            return GregtechTileCapabilities.CAPABILITY_CONFIGURABLE.cast(this);
         }
+
         return super.getCapability(capability, side);
     }
 
@@ -208,6 +212,25 @@ public class SimpleMachineMetaTileEntity extends WorkableTieredMetaTileEntity im
         this.autoOutputItems = data.getBoolean("AutoOutputItems");
         this.autoOutputFluids = data.getBoolean("AutoOutputFluids");
         this.allowInputFromOutputSide = data.getBoolean("AllowInputFromOutputSide");
+    }
+
+    @Override
+    public NBTTagCompound copyConfiguration(final ConfigurationContext context) {
+        final NBTTagCompound data = super.copyConfiguration(context);
+        data.setInteger("OutputFacing", getOutputFacing().getIndex());
+        data.setBoolean("AutoOutputItems", this.autoOutputItems);
+        data.setBoolean("AutoOutputFluids", this.autoOutputFluids);
+        data.setBoolean("AllowInputFromOutputSide", this.allowInputFromOutputSide);
+        return data;
+    }
+
+    @Override
+    public void pasteConfiguration(final ConfigurationContext context, final NBTTagCompound data) {
+        super.pasteConfiguration(context, data);
+        setOutputFacing(EnumFacing.VALUES[data.getInteger("OutputFacing")]);
+        setAutoOutputItems(data.getBoolean("AutoOutputItems"));
+        setAutoOutputFluids(data.getBoolean("AutoOutputFluids"));
+        setAllowInputFromOutputSide(data.getBoolean("AllowInputFromOutputSide"));
     }
 
     @Override

@@ -8,6 +8,7 @@ import codechicken.lib.vec.Matrix4;
 import gnu.trove.list.TIntList;
 import gnu.trove.list.array.TIntArrayList;
 import gregtech.api.GTValues;
+import gregtech.api.capability.ConfigurationContext;
 import gregtech.api.capability.GregtechTileCapabilities;
 import gregtech.api.capability.IControllable;
 import gregtech.api.capability.impl.ItemHandlerDelegate;
@@ -401,6 +402,9 @@ public class CoverConveyor extends CoverBehavior implements CoverWithUI, ITickab
         if(capability == GregtechTileCapabilities.CAPABILITY_CONTROLLABLE) {
             return GregtechTileCapabilities.CAPABILITY_CONTROLLABLE.cast(this);
         }
+        if (capability == GregtechTileCapabilities.CAPABILITY_CONFIGURABLE) {
+            return GregtechTileCapabilities.CAPABILITY_CONFIGURABLE.cast(this);
+        }
         return defaultValue;
     }
 
@@ -479,6 +483,38 @@ public class CoverConveyor extends CoverBehavior implements CoverWithUI, ITickab
         }
         if(tagCompound.hasKey("ManualImportExportMode")) {
             this.manualImportExportMode = ManualImportExportMode.values()[tagCompound.getInteger("ManualImportExportMode")];
+        }
+    }
+
+    @Override
+    public NBTTagCompound copyConfiguration(final ConfigurationContext context) {
+        final NBTTagCompound tagCompound = super.copyConfiguration(context);
+        tagCompound.setInteger("TransferRate", this.transferRate);
+        tagCompound.setInteger("ConveyorMode", this.conveyorMode.ordinal());
+        tagCompound.setInteger("ManualImportExportMode", this.manualImportExportMode.ordinal());
+        tagCompound.setTag("Filter", this.itemFilterContainer.copyConfiguration(context));
+        return tagCompound;
+    }
+
+    @Override
+    public void pasteConfiguration(final ConfigurationContext context, final NBTTagCompound tagCompound) {
+        super.pasteConfiguration(context, tagCompound);
+        setTransferRate(tagCompound.getInteger("TransferRate"));
+        setConveyorMode(ConveyorMode.values()[tagCompound.getInteger("ConveyorMode")]);
+        //LEGACY SAVE FORMAT SUPPORT
+        if (tagCompound.hasKey("AllowManualIO")) {
+            setManualImportExportMode(tagCompound.getBoolean("AllowManualIO")
+            ? ManualImportExportMode.FILTERED
+            : ManualImportExportMode.DISABLED);
+        }
+        if (tagCompound.hasKey("ManualImportExportMode")) {
+            setManualImportExportMode(ManualImportExportMode.values()[tagCompound.getInteger("ManualImportExportMode")]);
+        }
+        if (tagCompound.hasKey("FilterInventory")) {
+            this.itemFilterContainer.pasteConfiguration(context, tagCompound);
+        } else {
+            final NBTTagCompound filterComponent = tagCompound.getCompoundTag("Filter");
+            this.itemFilterContainer.pasteConfiguration(context, filterComponent);
         }
     }
 

@@ -18,4 +18,6 @@ public class GregtechTileCapabilities {
     @CapabilityInject(IActiveOutputSide.class)
     public static Capability<IActiveOutputSide> CAPABILITY_ACTIVE_OUTPUT_SIDE = null;
 
+    @CapabilityInject(IConfigurable.class)
+    public static Capability<IConfigurable> CAPABILITY_CONFIGURABLE = null;
 }
