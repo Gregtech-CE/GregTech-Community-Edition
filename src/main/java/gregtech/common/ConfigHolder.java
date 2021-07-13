@@ -24,6 +24,10 @@ public class ConfigHolder {
     @Config.RequiresMcRestart
     public static boolean hideFilledTanksInJEI = true;
 
+    @Config.Comment("Whether to hide tools in JEI and creative search menu showing only Darmstadtium. Default: true")
+    @Config.RequiresMcRestart
+    public static boolean hideToolsInJEI = true;
+
     @Config.Comment("Specifies min amount of veins in section. Default: 0")
     public static int minVeinsInSection = 0;
 

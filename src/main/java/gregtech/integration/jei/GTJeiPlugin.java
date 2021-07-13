@@ -8,6 +8,7 @@ import gregtech.api.capability.impl.AbstractRecipeLogic;
 import gregtech.api.capability.impl.FuelRecipeLogic;
 import gregtech.api.gui.impl.ModularUIGuiHandler;
 import gregtech.api.items.metaitem.MetaItem;
+import gregtech.api.items.toolitem.ToolMetaItem;
 import gregtech.api.metatileentity.MetaTileEntity;
 import gregtech.api.recipes.RecipeMap;
 import gregtech.api.recipes.RecipeMaps;
@@ -21,6 +22,7 @@ import gregtech.api.unification.material.type.Material;
 import gregtech.api.unification.ore.OrePrefix;
 import gregtech.api.worldgen.config.OreDepositDefinition;
 import gregtech.api.worldgen.config.WorldGenRegistry;
+import gregtech.common.ConfigHolder;
 import gregtech.common.blocks.MetaBlocks;
 import gregtech.common.items.MetaItems;
 import gregtech.common.metatileentities.MetaTileEntities;
@@ -33,6 +35,7 @@ import gregtech.integration.jei.recipe.primitive.*;
 import gregtech.integration.jei.utils.CustomItemReturnRecipeWrapper;
 import gregtech.integration.jei.utils.MachineSubtypeHandler;
 import gregtech.integration.jei.utils.MetaItemSubtypeHandler;
+import gregtech.integration.jei.utils.ToolMetaItemSubtypeHandler;
 import gregtech.loaders.recipe.CustomItemReturnShapedOreRecipeRecipe;
 import mezz.jei.api.*;
 import mezz.jei.api.ingredients.IIngredientRegistry;
@@ -57,9 +60,11 @@ public class GTJeiPlugin implements IModPlugin {
 
     @Override
     public void registerItemSubtypes(@Nonnull ISubtypeRegistry subtypeRegistry) {
-        MetaItemSubtypeHandler subtype = new MetaItemSubtypeHandler();
         for (MetaItem<?> metaItem : MetaItems.ITEMS) {
-            subtypeRegistry.registerSubtypeInterpreter(metaItem, subtype);
+            if (!ConfigHolder.hideToolsInJEI && metaItem instanceof ToolMetaItem)
+                subtypeRegistry.registerSubtypeInterpreter(metaItem, ToolMetaItemSubtypeHandler.INSTANCE);
+            else
+                subtypeRegistry.registerSubtypeInterpreter(metaItem, MetaItemSubtypeHandler.INSTANCE);
         }
         subtypeRegistry.registerSubtypeInterpreter(Item.getItemFromBlock(MetaBlocks.MACHINE), new MachineSubtypeHandler());
     }

@@ -5,6 +5,7 @@ import com.google.common.collect.HashMultimap;
 import com.google.common.collect.Multimap;
 import forestry.api.arboriculture.IToolGrafter;
 import gregtech.api.GTValues;
+import gregtech.api.GregTechAPI;
 import gregtech.api.capability.GregtechCapabilities;
 import gregtech.api.capability.IElectricItem;
 import gregtech.api.enchants.EnchantmentData;
@@ -24,6 +25,7 @@ import gregtech.common.ConfigHolder;
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.client.resources.I18n;
 import net.minecraft.client.util.ITooltipFlag;
+import net.minecraft.creativetab.CreativeTabs;
 import net.minecraft.enchantment.Enchantment;
 import net.minecraft.enchantment.EnchantmentDurability;
 import net.minecraft.enchantment.EnchantmentHelper;
@@ -34,9 +36,11 @@ import net.minecraft.entity.ai.attributes.AttributeModifier;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.init.Enchantments;
 import net.minecraft.inventory.EntityEquipmentSlot;
+import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.util.EntityDamageSource;
+import net.minecraft.util.NonNullList;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.math.RayTraceResult;
@@ -52,6 +56,7 @@ import org.apache.commons.lang3.Validate;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import java.util.*;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
 /**
@@ -68,6 +73,14 @@ import java.util.stream.Collectors;
  */
 @Interface(modid = GTValues.MODID_FR, iface = "forestry.api.arboriculture.IToolGrafter")
 public class ToolMetaItem<T extends ToolMetaItem<?>.MetaToolValueItem> extends MetaItem<T> implements IToolItem, IAOEItem, IToolGrafter {
+
+    public static boolean hasToolSubItems(final ItemStack itemStack) {
+        final Item item = itemStack.getItem();
+        if (item instanceof ToolMetaItem == false)
+            return false;
+        final ToolMetaItem<?>.MetaToolValueItem metaToolValueItem = (ToolMetaItem<?>.MetaToolValueItem)((ToolMetaItem) item).getItem(itemStack);
+        return metaToolValueItem.canGenerate != null;
+    }
 
     public ToolMetaItem() {
         super((short) 0);
@@ -422,6 +435,40 @@ public class ToolMetaItem<T extends ToolMetaItem<?>.MetaToolValueItem> extends M
 
     @Override
     @SideOnly(Side.CLIENT)
+    public void getSubItems(CreativeTabs tab, NonNullList<ItemStack> subItems) {
+        super.getSubItems(tab, subItems);
+
+        // Not expanding tools
+        if (ConfigHolder.hideToolsInJEI) {
+            return;
+        }
+
+        if (tab != GregTechAPI.TAB_GREGTECH_TOOLS && tab != CreativeTabs.SEARCH) {
+            return;
+        }
+
+        for (short itemMetaKey : metaItems.keys()) {
+            ToolMetaItem<?>.MetaToolValueItem metaToolValueItem = metaItems.get(itemMetaKey);
+
+            // This tool knows how to do this
+            if (metaToolValueItem.canGenerate != null) {
+                for (Material material : Material.MATERIAL_REGISTRY) {
+                    if (material instanceof SolidMaterial == false) {
+                        continue;
+                    }
+
+                    // Matching tool
+                    SolidMaterial solidMaterial = (SolidMaterial) material;
+                    if (metaToolValueItem.canGenerate.test(solidMaterial)) {
+                        subItems.add(metaToolValueItem.getStackForm(solidMaterial));
+                    }
+                }
+            }
+        }
+    }
+
+    @Override
+    @SideOnly(Side.CLIENT)
     public void addInformation(ItemStack itemStack, @Nullable World worldIn, List<String> lines, ITooltipFlag tooltipFlag) {
         T item = getItem(itemStack);
         if (item == null) {
@@ -609,6 +656,7 @@ public class ToolMetaItem<T extends ToolMetaItem<?>.MetaToolValueItem> extends M
 
         protected IToolStats toolStats = new DummyToolStats();
         protected double amountOfMaterialToRepair = 0;
+        protected Predicate<SolidMaterial> canGenerate;
 
         protected MetaToolValueItem(int metaValue, String unlocalizedName) {
             super(metaValue, unlocalizedName);
@@ -647,6 +695,11 @@ public class ToolMetaItem<T extends ToolMetaItem<?>.MetaToolValueItem> extends M
             for (ToolDictNames oreDict : oreDictNames) {
                 OreDictionary.registerOre(oreDict.name(), getStackForm());
             }
+            return this;
+        }
+
+        public MetaToolValueItem canGenerate(Predicate<SolidMaterial> canGenerate) {
+            this.canGenerate = canGenerate;
             return this;
         }
 

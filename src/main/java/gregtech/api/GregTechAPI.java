@@ -27,6 +27,8 @@ public class GregTechAPI {
         new BaseCreativeTab(GTValues.MODID + ".materials", () -> OreDictUnifier.get(OrePrefix.ingot, Materials.Aluminium), true);
     public static final BaseCreativeTab TAB_GREGTECH_ORES =
         new BaseCreativeTab(GTValues.MODID + ".ores", () -> MetaItems.JACKHAMMER.getStackForm(), true);
+    public static final BaseCreativeTab TAB_GREGTECH_TOOLS =
+        new BaseCreativeTab(GTValues.MODID + ".tools", () -> MetaItems.HARD_HAMMER.getStackForm(), true);
 
     public static final GTControlledRegistry<ResourceLocation, MetaTileEntity> META_TILE_ENTITY_REGISTRY = new GTControlledRegistry<>(Short.MAX_VALUE);
 

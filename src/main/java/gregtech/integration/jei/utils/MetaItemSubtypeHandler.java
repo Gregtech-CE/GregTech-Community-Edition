@@ -6,6 +6,9 @@ import mezz.jei.api.ISubtypeRegistry.ISubtypeInterpreter;
 import net.minecraft.item.ItemStack;
 
 public class MetaItemSubtypeHandler implements ISubtypeInterpreter {
+
+    public static final MetaItemSubtypeHandler INSTANCE = new MetaItemSubtypeHandler();
+
     @Override
     public String apply(ItemStack itemStack) {
         MetaItem<?> metaItem = (MetaItem<?>) itemStack.getItem();

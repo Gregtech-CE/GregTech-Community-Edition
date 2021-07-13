@@ -1773,6 +1773,7 @@ tile.multiblock_casing.fusion_mk2.name=Fusion Machine Casing MK II
 itemGroup.gregtech.main=GregTech CE
 itemGroup.gregtech.materials=Materials (GTCE)
 itemGroup.gregtech.ores=Ores (GTCE)
+itemGroup.gregtech.tools=Tools (GTCE)
 
 # Chests
 gregtech.machine.small_wooden_chest.name=Small Wooden Chest
