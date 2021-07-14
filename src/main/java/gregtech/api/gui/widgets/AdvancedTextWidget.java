@@ -2,6 +2,8 @@ package gregtech.api.gui.widgets;
 
 import gregtech.api.gui.IRenderContext;
 import gregtech.api.gui.Widget;
+import gregtech.api.gui.translation.EnhancedTextComponentSerializer;
+import gregtech.api.gui.translation.EnhancedTextComponentTranslation;
 import gregtech.api.util.Position;
 import gregtech.api.util.Size;
 import net.minecraft.client.Minecraft;
@@ -113,7 +115,7 @@ public class AdvancedTextWidget extends Widget {
             writeUpdateInfo(1, buffer -> {
                 buffer.writeVarInt(displayText.size());
                 for (ITextComponent textComponent : displayText) {
-                    buffer.writeString(ITextComponent.Serializer.componentToJson(textComponent));
+                    buffer.writeString(EnhancedTextComponentSerializer.componentToJson(textComponent));
                 }
             });
         }
@@ -169,7 +171,7 @@ public class AdvancedTextWidget extends Widget {
             int count = buffer.readVarInt();
             for (int i = 0; i < count; i++) {
                 String jsonText = buffer.readString(32767);
-                this.displayText.add(ITextComponent.Serializer.jsonToComponent(jsonText));
+                this.displayText.add(EnhancedTextComponentSerializer.jsonToComponent(jsonText));
             }
             formatDisplayText();
             updateComponentTextSize();
