@@ -95,7 +95,7 @@ public class DustMaterial extends FluidMaterial {
      * Tool level needed to harvest block of this material
      */
     @ZenProperty
-    public final int harvestLevel;
+    public int harvestLevel;
 
     /**
      * Material to which smelting of this material ore will result
